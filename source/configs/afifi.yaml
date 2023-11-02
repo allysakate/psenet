@@ -68,7 +68,7 @@ model:
 data:
   class_path: data.AfifiDataModule
   init_args:
-    data_root: /home/ubuntu/WACV/PSENet-Image-Enhancement/data_root/afifi/
-    train_batch_size: 64
-    val_batch_size: 4
-    num_workers: 4
+    data_root: /home/kate.brillantes/thesis/psenet/data/afifi/
+    train_batch_size: 1
+    val_batch_size: 1
+    num_workers: 1

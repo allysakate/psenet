@@ -2,7 +2,11 @@ import data
 import framework
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.utilities.cli import DATAMODULE_REGISTRY, MODEL_REGISTRY, LightningCLI
+from pytorch_lightning.utilities.cli import (
+    DATAMODULE_REGISTRY,
+    MODEL_REGISTRY,
+    LightningCLI,
+)
 
 
 class CustomLightningCLI(LightningCLI):

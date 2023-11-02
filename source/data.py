@@ -35,7 +35,9 @@ class NoGTDataset(data.Dataset):
 
 
 class PairedDataset(data.Dataset):
-    def __init__(self, root_folder, pattern, get_label_fn, resize=None, return_name=False):
+    def __init__(
+        self, root_folder, pattern, get_label_fn, resize=None, return_name=False
+    ):
         super().__init__()
         self.data_list = sorted(glob.glob(root_folder + pattern, recursive=True))
         self.gt_list = [get_label_fn(p) for p in self.data_list]
@@ -72,11 +74,22 @@ class PairedDataset(data.Dataset):
 class AfifiDataModule(LightningDataModule):
     def __init__(self, data_root, train_batch_size, val_batch_size, num_workers):
         super().__init__()
-        train_data = NoGTDataset(data_root, "training/INPUT_IMAGES/*.*", resize=256, return_name=False)
-        self.train_loader = DataLoader(train_data, batch_size=train_batch_size, shuffle=True, num_workers=num_workers)
+        train_data = NoGTDataset(
+            data_root, "training/INPUT_IMAGES/*.*", resize=256, return_name=False
+        )
+        self.train_loader = DataLoader(
+            train_data,
+            batch_size=train_batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+        )
 
-        val_data = NoGTDataset(data_root, "validation/INPUT_IMAGES/*.*", resize=512, return_name=False)
-        self.val_loader = DataLoader(val_data, batch_size=val_batch_size, shuffle=False, num_workers=num_workers)
+        val_data = NoGTDataset(
+            data_root, "validation/INPUT_IMAGES/*.*", resize=512, return_name=False
+        )
+        self.val_loader = DataLoader(
+            val_data, batch_size=val_batch_size, shuffle=False, num_workers=num_workers
+        )
 
         def get_label_fn(path):
             gt_path = path.replace("INPUT_IMAGES", "expert_e_testing_set")
@@ -84,8 +97,16 @@ class AfifiDataModule(LightningDataModule):
             gt_path = glob.glob(gt_path)[0]
             return gt_path
 
-        test_data = PairedDataset(data_root, "testing/INPUT_IMAGES/*.*", get_label_fn, resize=None, return_name=True)
-        self.test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=num_workers)
+        test_data = PairedDataset(
+            data_root,
+            "testing/INPUT_IMAGES/*.*",
+            get_label_fn,
+            resize=None,
+            return_name=True,
+        )
+        self.test_loader = DataLoader(
+            test_data, batch_size=1, shuffle=False, num_workers=num_workers
+        )
 
     def train_dataloader(self):
         return self.train_loader
@@ -101,8 +122,15 @@ class AfifiDataModule(LightningDataModule):
 class SICEDataModule(LightningDataModule):
     def __init__(self, data_root, train_batch_size, num_workers):
         super().__init__()
-        train_data = NoGTDataset(data_root, "train_data/*", resize=256, return_name=False)
-        self.train_loader = DataLoader(train_data, batch_size=train_batch_size, shuffle=True, num_workers=num_workers)
+        train_data = NoGTDataset(
+            data_root, "train_data/*", resize=256, return_name=False
+        )
+        self.train_loader = DataLoader(
+            train_data,
+            batch_size=train_batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+        )
 
         def get_label_fn(path):
             dirname = os.path.dirname(path)
@@ -110,8 +138,16 @@ class SICEDataModule(LightningDataModule):
             out = glob.glob(os.path.join(dirname, "Label", img_idx + ".*"))
             return out[0]
 
-        test_data = PairedDataset(data_root, "Dataset_Part2/[0-9]*/*.*", get_label_fn, resize=None, return_name=True)
-        self.test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=num_workers)
+        test_data = PairedDataset(
+            data_root,
+            "Dataset_Part2/[0-9]*/*.*",
+            get_label_fn,
+            resize=None,
+            return_name=True,
+        )
+        self.test_loader = DataLoader(
+            test_data, batch_size=1, shuffle=False, num_workers=num_workers
+        )
 
     def train_dataloader(self):
         return self.train_loader
@@ -128,8 +164,12 @@ class LOLDataModule(LightningDataModule):
         def get_label_fn(path):
             return path.replace("low", "high")
 
-        test_data = PairedDataset(data_root, "*/low/*.*", get_label_fn, resize=None, return_name=True)
-        self.test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=num_workers)
+        test_data = PairedDataset(
+            data_root, "*/low/*.*", get_label_fn, resize=None, return_name=True
+        )
+        self.test_loader = DataLoader(
+            test_data, batch_size=1, shuffle=False, num_workers=num_workers
+        )
 
     def test_dataloader(self):
         return self.test_loader

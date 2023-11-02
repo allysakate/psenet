@@ -19,7 +19,9 @@ def save_image(im, p):
 
 @MODEL_REGISTRY
 class PSENet(LightningModule):
-    def __init__(self, tv_w, gamma_lower, gamma_upper, number_refs, lr, afifi_evaluation=False):
+    def __init__(
+        self, tv_w, gamma_lower, gamma_upper, number_refs, lr, afifi_evaluation=False
+    ):
         super().__init__()
         self.tv_w = tv_w
         self.gamma_lower = gamma_lower
@@ -35,9 +37,17 @@ class PSENet(LightningModule):
         self.saved_pseudo_gt = None
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=[0.9, 0.99])
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.5, verbose=True)
-        return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "total_loss"}
+        optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=self.lr, betas=[0.9, 0.99]
+        )
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, patience=10, factor=0.5, verbose=True
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "total_loss",
+        }
 
     def training_epoch_end(self, outputs):
         sch = self.lr_schedulers()
@@ -46,21 +56,29 @@ class PSENet(LightningModule):
 
     def generate_pseudo_gt(self, im):
         bs, ch, h, w = im.shape
-        underexposed_ranges = torch.linspace(0, self.gamma_upper, steps=self.number_refs + 1).to(im.device)[:-1]
+        underexposed_ranges = torch.linspace(
+            0, self.gamma_upper, steps=self.number_refs + 1
+        ).to(im.device)[:-1]
         step_size = self.gamma_upper / self.number_refs
         underexposed_gamma = torch.exp(
-            torch.rand([bs, self.number_refs], device=im.device) * step_size + underexposed_ranges[None, :]
+            torch.rand([bs, self.number_refs], device=im.device) * step_size
+            + underexposed_ranges[None, :]
         )
-        overrexposed_ranges = torch.linspace(self.gamma_lower, 0, steps=self.number_refs + 1).to(im.device)[:-1]
-        step_size = - self.gamma_lower / self.number_refs
+        overrexposed_ranges = torch.linspace(
+            self.gamma_lower, 0, steps=self.number_refs + 1
+        ).to(im.device)[:-1]
+        step_size = -self.gamma_lower / self.number_refs
         overrexposed_gamma = torch.exp(
-            torch.rand([bs, self.number_refs], device=im.device) * overrexposed_ranges[None, :]
+            torch.rand([bs, self.number_refs], device=im.device)
+            * overrexposed_ranges[None, :]
         )
         gammas = torch.cat([underexposed_gamma, overrexposed_gamma], dim=1)
         # gammas: [bs, nref], im: [bs, ch, h, w] -> synthetic_references: [bs, nref, ch, h, w]
         synthetic_references = 1 - (1 - im[:, None]) ** gammas[:, :, None, None, None]
         previous_iter_output = self.model(im)[0].clone().detach()
-        references = torch.cat([im[:, None], previous_iter_output[:, None], synthetic_references], dim=1)
+        references = torch.cat(
+            [im[:, None], previous_iter_output[:, None], synthetic_references], dim=1
+        )
         nref = references.shape[1]
         scores = self.iqa(references.view(bs * nref, ch, h, w))
         scores = scores.view(bs, nref, 1, h, w)
@@ -87,7 +105,10 @@ class PSENet(LightningModule):
 
             # logging
             self.log(
-                "train_loss/", {"reconstruction": reconstruction_loss, "tv": tv_loss}, on_epoch=True, on_step=False
+                "train_loss/",
+                {"reconstruction": reconstruction_loss, "tv": tv_loss},
+                on_epoch=True,
+                on_step=False,
             )
             self.log("total_loss", loss, on_epoch=True, on_step=False)
             if batch_idx == 0:
