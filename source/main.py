@@ -1,3 +1,9 @@
+"""
+Usage
+cd source
+python main.py --config configs/afifi.yaml
+"""
+
 import data
 import framework
 import pytorch_lightning as pl

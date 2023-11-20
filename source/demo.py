@@ -1,3 +1,19 @@
+"""
+Usage:
+
+cd source
+0 mse = 1 tv = 500
+1 mse = 1 tv = 500 sm = 1 gamma
+2 mse = 1 tv = 500 sm = 10 gamma
+3 l1 = 1 tv = 500 cc = 1 smooth = 1
+4 l1 = 1 tv = 500 cc = 1 smooth = 1 iteration 1
+5 l1 = 1 tv = 500 cc = 1 smooth = 1 iteration 2
+6 l1 = 5 tv = 500 cc = 1 smooth = 1 iteration 2
+python demo.py --input_dir /home/kate.brillantes/thesis/psenet/data/demo/input \
+    --output_dir /home/kate.brillantes/thesis/psenet/data/demo/output \
+    --checkpoint /home/kate.brillantes/thesis/psenet/workdirs/afifi/version_19/checkpoints/last.ckpt
+"""
+
 import argparse
 import glob
 import os

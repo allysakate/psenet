@@ -60,6 +60,9 @@ model:
   class_path: framework.PSENet
   init_args:
     tv_w: 500
+    cc_w: 1
+    recon_w: 2
+    smooth_w: 1
     gamma_lower: -2
     gamma_upper: 3
     number_refs: 1
@@ -69,6 +72,6 @@ data:
   class_path: data.AfifiDataModule
   init_args:
     data_root: /home/kate.brillantes/thesis/psenet/data/afifi/
-    train_batch_size: 1
-    val_batch_size: 1
-    num_workers: 1
+    train_batch_size: 64
+    val_batch_size: 4
+    num_workers: 4

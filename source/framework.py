@@ -1,10 +1,12 @@
 import os
-
+import cv2
+import numpy as np
 import piq
 import torch
 import torchvision
+import torchvision.transforms as transforms
 from iqa import IQA
-from loss import TVLoss
+from loss import Loss
 from model import UnetTMO
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning.utilities.cli import MODEL_REGISTRY
@@ -20,7 +22,16 @@ def save_image(im, p):
 @MODEL_REGISTRY
 class PSENet(LightningModule):
     def __init__(
-        self, tv_w, gamma_lower, gamma_upper, number_refs, lr, afifi_evaluation=False
+        self,
+        tv_w,
+        cc_w,
+        recon_w,
+        smooth_w,
+        gamma_lower,
+        gamma_upper,
+        number_refs,
+        lr,
+        afifi_evaluation=False,
     ):
         super().__init__()
         self.tv_w = tv_w
@@ -31,7 +42,7 @@ class PSENet(LightningModule):
         self.lr = lr
         self.model = UnetTMO()
         self.mse = torch.nn.MSELoss()
-        self.tv = TVLoss()
+        self.loss = Loss(tv_w, cc_w, recon_w, smooth_w)
         self.iqa = IQA()
         self.saved_input = None
         self.saved_pseudo_gt = None
@@ -54,6 +65,39 @@ class PSENet(LightningModule):
         if isinstance(sch, torch.optim.lr_scheduler.ReduceLROnPlateau):
             sch.step(self.trainer.callback_metrics["total_loss"])
 
+    def cv2_to_tensor(self, cv2_img):
+        cv2_img = cv2_img[:, :, ::-1]
+        cv2_img = cv2_img / 255.0
+        return torch.from_numpy(cv2_img).float().permute(2, 0, 1)
+
+    def tensor_to_cv2(self, tensor_img):
+        tensor_img = tensor_img.detach().cpu()
+        transform = transforms.ToPILImage()
+        pil_img = transform(tensor_img)
+        return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
+    def cover_lights(self, syn_pseudo, syn_dark):
+        cv2_pseudo = self.tensor_to_cv2(syn_pseudo)
+        cv2_dark = self.tensor_to_cv2(syn_dark)
+
+        cv2_dark_gray = cv2.cvtColor(cv2_dark, cv2.COLOR_BGR2GRAY)
+        _, mask = cv2.threshold(
+            cv2_dark_gray, thresh=225, maxval=255, type=cv2.THRESH_BINARY
+        )
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        mask = cv2.dilate(mask, kernel, iterations=2)
+        mask_bgr = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+        img_pseudo = cv2_pseudo.copy()
+
+        # img_dark = cv2_dark.copy()
+        # img_dark[(mask==255).all(-1)] = [0,0,0]
+        # cv2_dark_w = cv2.addWeighted(img_dark, 0.4, cv2_dark, 0.6, 0, img_dark)
+
+        img_pseudo[(mask_bgr == 255).all(-1)] = [128, 128, 128]
+        cv2_pseudo_w = cv2.addWeighted(img_pseudo, 0.1, cv2_pseudo, 0.9, 0, img_pseudo)
+        # return self.cv2_to_tensor(cv2_pseudo_w), self.cv2_to_tensor(cv2_dark_w)
+        return self.cv2_to_tensor(cv2_pseudo_w)
+
     def generate_pseudo_gt(self, im):
         bs, ch, h, w = im.shape
         underexposed_ranges = torch.linspace(
@@ -75,6 +119,7 @@ class PSENet(LightningModule):
         gammas = torch.cat([underexposed_gamma, overrexposed_gamma], dim=1)
         # gammas: [bs, nref], im: [bs, ch, h, w] -> synthetic_references: [bs, nref, ch, h, w]
         synthetic_references = 1 - (1 - im[:, None]) ** gammas[:, :, None, None, None]
+        syn_dark = synthetic_references[:, -1, :, :, :]
         previous_iter_output = self.model(im)[0].clone().detach()
         references = torch.cat(
             [im[:, None], previous_iter_output[:, None], synthetic_references], dim=1
@@ -85,7 +130,11 @@ class PSENet(LightningModule):
         max_idx = torch.argmax(scores, dim=1)
         max_idx = max_idx.repeat(1, ch, 1, 1)[:, None]
         pseudo_gt = torch.gather(references, 1, max_idx)
-        return pseudo_gt.squeeze(1)
+        syn_pseudo = pseudo_gt.squeeze(1)
+        for idx, dark_ref in enumerate(syn_dark):
+            pseudo_ref = self.cover_lights(syn_pseudo[idx], dark_ref)
+            syn_pseudo[idx] = pseudo_ref
+        return pseudo_gt.squeeze(1), syn_pseudo.squeeze(1)  # pseudo_gt, syn_pseudo
 
     def training_step(self, batch, batch_idx):
         # a hack to get the output from previous iterator
@@ -93,20 +142,18 @@ class PSENet(LightningModule):
 
         # saving n-th input and n-th pseudo gt
         nth_input = batch
-        nth_pseudo_gt = self.generate_pseudo_gt(batch)
+        nth_pseudo_gt, syn_pseudo = self.generate_pseudo_gt(batch)
         if self.saved_input is not None:
             # getting (n - 1)th input and (n - 1)-th pseudo gt -> calculate loss -> update model weight (handeled automatically by pytorch lightning)
             im = self.saved_input
             pred_im, pred_gamma = self.model(im)
             pseudo_gt = self.saved_pseudo_gt
-            reconstruction_loss = self.mse(pred_im, pseudo_gt)
-            tv_loss = self.tv(pred_gamma)
-            loss = reconstruction_loss + tv_loss * self.tv_w
+            loss = self.loss.get_loss(pred_im, pred_gamma, pseudo_gt, syn_pseudo)
 
             # logging
             self.log(
                 "train_loss/",
-                {"reconstruction": reconstruction_loss, "tv": tv_loss},
+                {"loss": loss},
                 on_epoch=True,
                 on_step=False,
             )
